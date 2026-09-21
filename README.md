@@ -1,26 +1,17 @@
-# Estimador CAG
+## Interfaz conversacional con Streamlit
 
-API desarrollada con FastAPI que genera estimaciones de proyectos
-de software utilizando un LLM y contexto estático (CAG).
+Este proyecto incluye una interfaz conversacional desarrollada con Streamlit.
 
-## Setup
+La misma nos permite pegar la transcripción de una reunión y recibir una estimación de software generada por un LLM.
 
-Instalar dependencias:
+### Ejecutar la interfaz
 
-uv sync
+```bash
+uv run streamlit run streamlit_app.py
+```
 
-Crear `.env` a partir de `.env.example` y añadir una API key de OpenAI.
+La aplicación estará disponible en:
 
-## Run
-
-uv run uvicorn app.main:app --reload
-
-## API
-
-POST /api/v1/estimate
-
-GET /health
-
-Swagger:
-
-http://localhost:8000/docs
+```bash
+http://localhost:8501
+```
