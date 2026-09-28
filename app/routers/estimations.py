@@ -1,24 +1,17 @@
 from fastapi import APIRouter
-from pydantic import BaseModel
-from app.config import settings
+from app.prompts.loader import render_estimation_prompt
+from app.schemas import EstimationRequest, EstimationResponse
 from app.services.llm_service import generate_estimation
 
 router = APIRouter()
 
-class EstimationRequest(BaseModel):
-    transcription: str
-
-class EstimationResponse(BaseModel):
-    estimation: str
-    model: str
-    provider: str
-
-@router.post("/api/v1/estimate", response_model=EstimationResponse)
+@router.post("/estimate", response_model=EstimationResponse)
 def estimate(request: EstimationRequest):
-    estimation = generate_estimation(request.transcription)
+    system, user = render_estimation_prompt(request)
+
+    estimation = generate_estimation(system, user)
 
     return EstimationResponse(
-        estimation=estimation,
-        model=settings.llm_model,
-        provider=settings.llm_provider,
+        text=estimation,
+        prompt_version="v1"
     )

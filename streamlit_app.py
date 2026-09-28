@@ -1,43 +1,50 @@
+import httpx
 import streamlit as st
-from openai import OpenAI
-from app.config import settings
-from app.services.llm_service import SYSTEM_PROMPT
+from app.schemas import DetailLevel, OutputFormat, ProjectType
 
-client = OpenAI(api_key=settings.openai_api_key)
+st.title("Estimador de Software")
 
-st.title("Estimador de Proyectos de Software")
+with st.form("estimation_form"):
+    description = st.text_area(
+        "Descripción del proyecto",
+        placeholder="Describe las necesidades del proyecto...",
+    )
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+    project_type = st.selectbox(
+        "Tipo de proyecto",
+        options=list(ProjectType),
+        format_func=lambda option: option.value
+    )
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+    detail_level = st.selectbox(
+        "Nivel de detalle",
+        options=list(DetailLevel),
+        format_func=lambda option: option.value
+    )
 
-transcription = st.chat_input("Pega aquí la transcripción de la reunión...")
+    output_format = st.selectbox(
+        "Formato de salida",
+        options=list(OutputFormat),
+        format_func=lambda option: option.value
+    )
 
-if transcription:
-    st.session_state.messages.append({
-        "role": "user",
-        "content": transcription
-    })
+    submitted = st.form_submit_button("Generar estimación")
 
-    with st.chat_message("user"):
-        st.markdown(transcription)
+if submitted:
+    request_data = {
+        "description": description,
+        "project_type": project_type.value,
+        "detail_level": detail_level.value,
+        "output_format": output_format.value,
+    }
 
-    with st.chat_message("assistant"):
-        stream = client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": transcription},
-            ],
-            stream=True,
-        )
+    response = httpx.post(
+        "http://localhost:8000/estimate",
+        json=request_data,
+    )
 
-        estimation = st.write_stream(stream)
-
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": estimation
-    })
+    if response.status_code == 200:
+        result = response.json()
+        st.markdown(result["text"])
+    else:
+        st.error("Error al generar la estimación")
