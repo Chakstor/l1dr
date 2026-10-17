@@ -1,104 +1,15 @@
-# Estimador CAG
+# AI Engineering Master — LIDR
 
-API de estimación de proyectos de software con memoria conversacional,
-desarrollada con FastAPI y un cliente en Streamlit.
+Projects built during the AI Engineering Master at LIDR: LLM-powered applications, context strategies (CAG/RAG), agents and evaluation.
 
-## Instalación
+Each project lives in its own branch with its own README (setup, run and tests).
 
-Dependencias:
+## Projects
 
-```bash
-uv sync
-```
+| # | Project | Description | Stack | Branch |
+|---|---|---|---|---|
+| 1 | Estimador CAG | API that generates software project estimates with an LLM and static context (CAG) | Python · FastAPI · OpenAI | [`project-1-estimador-cag`](../../tree/project-1-estimador-cag) |
 
-Crear un archivo `.env` con la configuración necesaria para el proveedor
-LLM (ver .env.example).
+## Author
 
-## Ejecutar la API
-
-```bash
-uv run uvicorn app.main:app --reload
-```
-
-La API estará disponible en:
-
-`http://localhost:8000/docs`
-
-## Ejecutar Streamlit
-
-En otra terminal:
-
-```bash
-uv run streamlit run streamlit_app.py
-```
-
-## Sesiones y memoria conversacional
-
-Cada conversación utiliza una sesión identificada con su id: `session_id`.
-
-La API expone:
-
-- `POST /sessions`: crea una nueva sesión.
-- `POST /sessions/{session_id}/estimate`: genera una estimación
-  utilizando el contexto de la sesión.
-
-Cada sesión mantiene dos tipos de información:
-
-- `ConversationHistory`: los últimos 6 turnos de conversación mediante una ventana deslizante.
-- `ProjectMetadata`: información estructurada del proyecto (nombre, equipo, tecnologías, etc.)
-
-## Adjuntos
-
-El endpoint acepta archivos PDF y DOCX mediante `multipart/form-data`.
-
-Se ha elegido el **Camino B: extracción local de texto**.
-
-- PDF: `pypdf`
-- DOCX: `python-docx`
-
-El texto extraído se añade al contexto enviado al LLM utilizando un separador:
-
-```text
---- attachment: filename.pdf ---
-contenido del documento
-```
-
-Se eligió este enfoque porque mantiene el procesamiento independiente de
-las capacidades multimodales de un proveedor concreto y permite
-controlar directamente el texto que se incorpora al contexto.
-
-## Extracción de project_metadata
-
-Después de cada respuesta se realiza una segunda llamada al LLM para
-actualizar `ProjectMetadata`.
-
-El extractor recibe:
-
-- metadata actual
-- mensaje del usuario
-- respuesta del asistente
-
-y devuelve un nuevo `ProjectMetadata` estructurado.
-
-Se eligió un **LLM extractor** en lugar de una heurística basada en
-regex porque permite interpretar información expresada de distintas
-formas y actualizar los datos estructurados de manera más robusta.
-
-Como contrapartida, este enfoque añade una segunda llamada al LLM en
-cada turno, aumentando el coste y la latencia.
-
-## Tests
-
-Ejecutar:
-
-```bash
-uv run python -m pytest tests/test_sessions.py -v
-```
-
-Los tests comprueban:
-
-1.  Que la ventana deslizante conserva únicamente los últimos 6 turnos.
-2.  Que `project_metadata` persiste y se actualiza entre peticiones de
-    una misma sesión.
-3.  Que el contenido extraído de un PDF se incorpora al contexto de la
-    estimación.
+Carlos Mateo · [LinkedIn](https://linkedin.com/in/carlosmateoc/)
