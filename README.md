@@ -1,15 +1,22 @@
-# AI Engineering Master — LIDR
+# Máster de AI Engineering — LIDR
 
-Projects built during the AI Engineering Master at LIDR: LLM-powered applications, context strategies (CAG/RAG), agents and evaluation.
+Repositorio de proyectos y prácticas desarrollados durante el Máster de AI Engineering de LIDR.
 
-Each project lives in its own branch with its own README (setup, run and tests).
+El proyecto principal es un **estimador de proyectos de software basado en modelos de lenguaje (LLM)**. Las prácticas exploran el uso de contexto estático (CAG), interfaces con Streamlit, prompts versionados y memoria conversacional.
 
-## Projects
+## Proyectos y prácticas
 
-| # | Project | Description | Stack | Branch |
-|---|---|---|---|---|
-| 1 | Estimador CAG | API that generates software project estimates with an LLM and static context (CAG) | Python · FastAPI · OpenAI | [`project-1-estimador-cag`](../../tree/project-1-estimador-cag) |
+| Proyecto / Práctica | Descripción | Tecnologías principales | Rama |
+|---|---|---|---|
+| Estimador CAG | API que genera estimaciones de proyectos de software con un LLM y ejemplos de referencia como contexto. | Python · FastAPI · OpenAI | [`project-1-estimador-cag`](../../tree/project-1-estimador-cag) |
+| Interfaz conversacional | Interfaz para obtener estimaciones a partir de transcripciones de reuniones. | Python · Streamlit · OpenAI | [`practice-3-streamlit`](../../tree/practice-3-streamlit) |
+| Formulario y prompts versionados | Configuración de las estimaciones mediante un formulario y plantillas de prompts versionadas. | FastAPI · Streamlit · Jinja2 | [`pre-session-04`](../../tree/pre-session-04) |
+| Memoria y adjuntos | Estimaciones con memoria conversacional, metadatos del proyecto y documentos PDF/DOCX como contexto. | FastAPI · Streamlit · OpenAI | [`pre-session-05`](../../tree/pre-session-05) |
 
-## Author
+## Cómo empezar
+
+Accede a la rama de la práctica que quieras explorar. Su README contiene la descripción y las instrucciones de uso correspondientes.
+
+## Autor
 
 Carlos Mateo · [LinkedIn](https://linkedin.com/in/carlosmateoc/)
