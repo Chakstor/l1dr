@@ -1,8 +1,8 @@
 from openai import OpenAI
-from app.config import settings
+from app.config import get_settings
 from app.context.examples import ESTIMATION_EXAMPLES
 
-client = OpenAI(api_key=settings.openai_api_key)
+client = OpenAI(api_key=get_settings().OPENAI_API_KEY)
 
 examples_text = ""
 
@@ -28,7 +28,7 @@ total de horas, equipo recomendado y duración estimada.
 def generate_estimation(transcription: str) -> str:
 
     response = client.chat.completions.create(
-        model=settings.llm_model,
+        model=get_settings().LLM_MODEL,
         messages=[
             {
                 "role": "system",
