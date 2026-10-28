@@ -1,25 +1,18 @@
-from fastapi import APIRouter
-from pydantic import BaseModel
-from app.config import get_settings
-from app.services.llm_service import generate_estimation
+from fastapi import APIRouter, HTTPException
 
-router = APIRouter()
+from app.schemas.estimation import EstimationRequest, EstimationResponse
+from app.services.llm_service import LLMServiceError, generate_estimation
 
-class EstimationRequest(BaseModel):
-    transcription: str
+router = APIRouter(prefix="/api/v1", tags=["estimations"])
 
-class EstimationResponse(BaseModel):
-    estimation: str
-    model: str
-    provider: str
+@router.post("/estimate", response_model=EstimationResponse)
+def create_estimation(request: EstimationRequest) -> EstimationResponse:
+    """Recibe la transcripción de una reunión y devuelve una estimación."""
 
-@router.post("/api/v1/estimate", response_model=EstimationResponse)
-def estimate(request: EstimationRequest):
-    estimation = generate_estimation(request.transcription)
-    settings = get_settings()
+    try:
+        result = generate_estimation(request.transcription)
+    except LLMServiceError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    return EstimationResponse(
-        estimation=estimation,
-        model=settings.LLM_MODEL,
-        provider=settings.LLM_PROVIDER,
-    )
+    # **results same as ...result in JS
+    return EstimationResponse(**result)
