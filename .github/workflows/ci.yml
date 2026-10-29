@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  validate:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -15,13 +15,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Install Python
-        run: uv python install 3.11
-
       - name: Install dependencies
         run: uv sync --locked
 
-      - name: Validate application
-        env:
-          OPENAI_API_KEY: some-test-key
-        run: uv run python -c "from app.main import app; print('The application was loaded successfully!')"
+      - name: Smoke test
+        run: uv run python -c "from app.main import app; print('App loaded')"
+
+      - name: Run tests
+        run: uv run pytest -v
