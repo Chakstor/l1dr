@@ -39,3 +39,16 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 ```
 
 También puedes copiar el contenido del JSON en Swagger (`/docs`) → `POST /api/v1/estimate` → _Try it out_.
+
+## Interfaz conversacional (Streamlit)
+
+Interfaz de chat para pegar una transcripción y ver la estimación en streaming.
+El panel lateral muestra el system prompt activo, los ejemplos CAG inyectados
+y las métricas de la última llamada (tokens, tiempo hasta el primer token y tiempo total).
+
+```bash
+uv run streamlit run streamlit_app.py
+```
+
+Disponible en `http://localhost:8501`. Usa la misma configuración (`.env`) y la misma
+lógica de llamada al LLM que la API.
