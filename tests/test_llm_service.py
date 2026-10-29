@@ -2,7 +2,7 @@ import pytest
 
 from app.config import get_settings
 from app.services import llm_service
-from app.services.llm_service import LLMServiceError
+from app.services.llm_service import LLMServiceError, StreamMetrics
 
 FAKE_PROVIDER_RESULT = {
     "estimation": "## Estimación de prueba",
@@ -60,3 +60,33 @@ def test_provider_errors_are_wrapped(monkeypatch):
         llm_service.generate_estimation("transcripción de prueba")
 
     assert "api down" in str(exc_info.value)
+
+
+def test_stream_estimation_yields_chunks_and_fills_metrics(monkeypatch):
+    def fake_stream(system, user, metrics):
+        metrics.provider = "openai"
+        metrics.model = "fake-model"
+        metrics.input_tokens = 10
+        metrics.output_tokens = 3
+        yield "Hola "
+        yield "mundo"
+
+    monkeypatch.setattr(llm_service, "_stream_openai", fake_stream)
+
+    metrics = StreamMetrics()
+    text = "".join(llm_service.stream_estimation("transcripción de prueba", metrics))
+
+    assert text == "Hola mundo"
+    assert metrics.input_tokens == 10
+    assert metrics.first_token_ms is not None
+    assert metrics.latency_ms >= metrics.first_token_ms
+
+
+def test_stream_errors_are_wrapped(monkeypatch):
+    def broken_stream(system, user, metrics):
+        raise RuntimeError("api down")
+
+    monkeypatch.setattr(llm_service, "_stream_openai", broken_stream)
+
+    with pytest.raises(LLMServiceError):
+        list(llm_service.stream_estimation("transcripción de prueba", StreamMetrics()))
