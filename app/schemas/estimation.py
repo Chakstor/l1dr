@@ -29,3 +29,19 @@ class EstimationResponse(BaseModel):
     latency_ms: int = Field(...,  description="Tiempo total de la llamada en milisegundos")
     cost_usd: float = Field(default=0.0, description="Coste estimado de la llamada en USD (0 si vino de caché)")
     cache_hit: bool = Field(default=False, description="True si la respuesta vino de la caché de Redis")
+
+
+class ContextExample(BaseModel):
+    """Un ejemplo de estimación previa de los que se inyectan en el prompt (CAG)."""
+
+    meeting_summary: str
+    estimation: str
+
+
+class ContextResponse(BaseModel):
+    """Contexto CAG activo, para que los clientes puedan mostrarlo."""
+
+    system_prompt: str
+    examples: list[ContextExample]
+    primary_model: str
+    fallback_model: str
