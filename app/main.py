@@ -96,11 +96,23 @@ async def request_context(request: Request, call_next):
         raise
 
     response.headers[REQUEST_ID_HEADER] = request_id
-    log.info(
-        "request_finished",
-        status_code=response.status_code,
-        duration_ms=int((time.perf_counter() - start) * 1000),
-    )
+
+    # La respuesta se envía a trozos (en streaming SSE pueden ser segundos), así que
+    # registramos "request_finished" cuando se ha enviado el último trozo, no antes.
+    body = response.body_iterator
+
+    async def body_then_log():
+        try:
+            async for chunk in body:
+                yield chunk
+        finally:
+            log.info(
+                "request_finished",
+                status_code=response.status_code,
+                duration_ms=int((time.perf_counter() - start) * 1000),
+            )
+
+    response.body_iterator = body_then_log()
     return response
 
 
