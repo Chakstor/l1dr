@@ -13,10 +13,6 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     ANTHROPIC_API_KEY: str | None = None
     
-    # --- Sesión 2 (se eliminan en el bloque B, cuando entre el wrapper) ---
-    LLM_PROVIDER: Literal["openai", "anthropic"] = "openai"
-    LLM_MODEL: str = "gpt-4o-mini"
-
     # --- Sesión 3: wrapper LiteLLM ---
     PRIMARY_MODEL: str = "gpt-4o-mini"
     FALLBACK_MODEL: str = "claude-haiku-4-5-20251001"

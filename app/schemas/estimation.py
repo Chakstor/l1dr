@@ -27,4 +27,5 @@ class EstimationResponse(BaseModel):
     usage: TokenUsage
     finish_reason: str = Field(..., description="Motivo por el que el modelo dejó de generar")
     latency_ms: int = Field(...,  description="Tiempo total de la llamada en milisegundos")
-    
+    cost_usd: float = Field(default=0.0, description="Coste estimado de la llamada en USD (0 si vino de caché)")
+    cache_hit: bool = Field(default=False, description="True si la respuesta vino de la caché de Redis")

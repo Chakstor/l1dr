@@ -26,7 +26,7 @@ def render_sidebar() -> None:
 
     with st.sidebar:
         st.header("Contexto CAG")
-        st.markdown(f"**Proveedor:** `{settings.LLM_PROVIDER}` · **Modelo:** `{settings.LLM_MODEL}`")
+        st.markdown(f"**Primario:** `{settings.PRIMARY_MODEL}`  \n**Fallback:** `{settings.FALLBACK_MODEL}`")
 
         st.subheader("Última llamada")
         metrics = st.session_state.last_metrics
@@ -38,7 +38,12 @@ def render_sidebar() -> None:
             col2.metric("Tokens salida", metrics.output_tokens)
             col1.metric("Primer token", f"{metrics.first_token_ms} ms")
             col2.metric("Tiempo total", f"{metrics.latency_ms / 1000:.1f} s")
-            st.caption(f"Modelo: `{metrics.model}` · Fin: `{metrics.finish_reason}`")
+            col1.metric("Coste", f"${metrics.cost_usd:.5f}")
+            col2.metric("Caché", "HIT ✅" if metrics.cache_hit else "MISS")
+            st.caption(
+                f"Modelo: `{metrics.model}` · Fin: `{metrics.finish_reason}`"
+                + (" · ⚠️ respondió el fallback" if metrics.fallback_used else "")
+            )
 
         with st.expander("System prompt activo"):
             st.code(build_system_prompt(), language="markdown")
@@ -75,5 +80,4 @@ if transcription := st.chat_input("Pega aquí la transcripción de la reunión..
             st.session_state.messages.append({"role": "assistant", "content": estimation})
             st.session_state.last_metrics = metrics
 
-if transcription:
-    render_sidebar()
+render_sidebar()
