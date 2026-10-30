@@ -43,9 +43,24 @@ Todas las llamadas pasan por `app/services/llm_wrapper.py` (LiteLLM):
 
 ## API
 
-POST /api/v1/estimate
+| Endpoint | Qué hace |
+|---|---|
+| `POST /api/v1/estimate` | Estimación completa en una sola respuesta JSON |
+| `POST /api/v1/estimate/stream` | La misma estimación en streaming (Server-Sent Events) |
+| `GET /api/v1/context` | System prompt, ejemplos CAG y modelos configurados |
+| `GET /health` | Health check |
 
-GET /health
+El endpoint de streaming envía estos eventos SSE, en orden:
+`token` (`{"text": ...}`, muchos) → `metrics` (tokens, coste, caché, fallback, latencias) → `done`.
+Si el LLM falla, envía un evento `error` (`{"detail": ...}`) y termina.
+
+Probarlo con curl (`-N` desactiva el buffer para ver los eventos según llegan):
+
+```bash
+curl -N -X POST http://localhost:8000/api/v1/estimate/stream \
+  -H "Content-Type: application/json" \
+  -d @samples/estimate_request.json
+```
 
 Swagger:
 
@@ -72,9 +87,14 @@ Interfaz de chat para pegar una transcripción y ver la estimación en streaming
 El panel lateral muestra el system prompt activo, los ejemplos CAG inyectados
 y las métricas de la última llamada (tokens, coste, caché, tiempo hasta el primer token y tiempo total).
 
+Streamlit es un **cliente HTTP de la API** (`estimator_client.py`): necesita la API arrancada.
+
 ```bash
-uv run streamlit run streamlit_app.py
+uv run uvicorn app.main:app --reload      # terminal 1
+uv run streamlit run streamlit_app.py     # terminal 2
 ```
 
-Disponible en `http://localhost:8501`. Usa la misma configuración (`.env`) y la misma
-lógica de llamada al LLM que la API.
+Disponible en `http://localhost:8501`. La URL de la API se configura con
+`ESTIMATOR_API_BASE_URL` en el `.env` (por defecto `http://localhost:8000`).
+Cada mensaje envía su propio `X-Request-ID`, que se muestra en el panel lateral
+y aparece en los logs de la API.
