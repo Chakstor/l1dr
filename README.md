@@ -9,11 +9,37 @@ Instalar dependencias:
 
 uv sync
 
-Crear `.env` a partir de `.env.example` y añadir una API key de OpenAI.
+Crear `.env` a partir de `.env.example` y añadir las API keys. Con una basta;
+con las dos (OpenAI y Anthropic) funciona el fallback entre proveedores.
 
 ## Run
 
+Levantar Redis (caché de respuestas):
+
+```bash
+docker compose up -d
+```
+
+Arrancar la API:
+
+```bash
 uv run uvicorn app.main:app --reload
+```
+
+Si Redis no está levantado, la API funciona igual pero sin caché (aparece un
+aviso `cache_unavailable` en los logs al arrancar).
+
+## Cómo llama al LLM
+
+Todas las llamadas pasan por `app/services/llm_wrapper.py` (LiteLLM):
+
+- **Fallback:** intenta `PRIMARY_MODEL` y, si falla, `FALLBACK_MODEL`.
+- **Reintentos y timeout:** `LLM_RETRIES` y `LLM_TIMEOUT`.
+- **Caché exact-match en Redis:** la misma transcripción devuelve la respuesta guardada
+  (`cache_hit: true`, `cost_usd: 0`) durante `CACHE_TTL` segundos.
+- **Coste:** cada respuesta incluye `cost_usd`, calculado con los precios de LiteLLM.
+- **Trazabilidad:** cada petición lleva un `X-Request-ID` (se devuelve en la cabecera
+  de la respuesta) que aparece en todos los logs de esa petición.
 
 ## API
 
@@ -44,7 +70,7 @@ También puedes copiar el contenido del JSON en Swagger (`/docs`) → `POST /api
 
 Interfaz de chat para pegar una transcripción y ver la estimación en streaming.
 El panel lateral muestra el system prompt activo, los ejemplos CAG inyectados
-y las métricas de la última llamada (tokens, tiempo hasta el primer token y tiempo total).
+y las métricas de la última llamada (tokens, coste, caché, tiempo hasta el primer token y tiempo total).
 
 ```bash
 uv run streamlit run streamlit_app.py
