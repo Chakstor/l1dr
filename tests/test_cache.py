@@ -63,7 +63,10 @@ class BrokenRedis:
     def get(self, key):
         raise redis.ConnectionError("redis down")
 
-    def setex(self, key, ttl, value):
+    def set(self, key, value, ex=None):
+        raise redis.ConnectionError("redis down")
+
+    def ping(self):
         raise redis.ConnectionError("redis down")
 
 
@@ -74,3 +77,11 @@ def test_cache_degrades_gracefully_when_redis_is_down():
     cache.set(key, {"x": 1})
 
     assert cache.get(key) is None
+
+
+def test_is_available_true_when_redis_responds(cache):
+    assert cache.is_available() is True
+
+
+def test_is_available_false_when_redis_is_down():
+    assert EstimationCache(BrokenRedis(), ttl=60).is_available() is False

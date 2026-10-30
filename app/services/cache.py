@@ -64,7 +64,15 @@ class EstimationCache:
     def set(self, key: str, response: dict[str, Any]) -> None:
         """Guarda la respuesta con caducidad. Si Redis falla, se registra y se sigue."""
         try:
-            self.redis.setex(key, self.ttl, json.dumps(response))
+            self.redis.set(key, json.dumps(response), ex=self.ttl)
             log.info("cache_stored", key=key[:24], ttl=self.ttl)
         except redis.RedisError as exc:
             log.warning("cache_set_failed", error=str(exc))
+
+
+    def is_available(self) -> bool:
+        """Comprueba si Redis responde. Se usa al arrancar para avisar en los logs."""
+        try:
+            return bool(self.redis.ping())
+        except redis.RedisError:
+            return False
