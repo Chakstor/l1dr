@@ -1,4 +1,4 @@
-from app.prompts.loader import render_estimation_prompt
+from app.prompts.loader import render_estimation_examples, render_estimation_prompt
 import pytest
 from jinja2 import TemplateNotFound, UndefinedError
 
@@ -101,3 +101,11 @@ def test_strict_undefined_fails_when_a_variable_is_missing():
 def test_unknown_version_fails():
     with pytest.raises(TemplateNotFound):
         render_estimation_prompt(make_request(), version="v99")
+
+
+def test_examples_can_be_rendered_on_their_own():
+    examples = render_estimation_examples()
+    system, _ = render_estimation_prompt(make_request())
+
+    assert examples.startswith("<ejemplos>")
+    assert examples in system

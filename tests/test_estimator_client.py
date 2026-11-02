@@ -39,3 +39,6 @@ def test_client_wraps_connection_errors():
 
     with pytest.raises(EstimatorAPIError, match="No se pudo conectar"):
         client.get_context()
+
+    with pytest.raises(EstimatorAPIError, match="No se pudo conectar"):
+        client.preview_prompt({"description": "x" * 60})

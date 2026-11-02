@@ -1,5 +1,6 @@
 import pytest
 
+from app.config import get_settings
 from app.dependencies import get_llm_wrapper
 from app.main import app
 from estimator_client import EstimatorAPIError, EstimatorClient, StreamResult, parse_sse
@@ -126,3 +127,42 @@ def test_context_returns_models_prompt_version_and_form_options(client):
     assert context["prompt_version"] == "v1"
     assert context["options"]["output_format"] == ["phases_table", "line_items", "narrative"]
     assert "web_saas" in context["options"]["project_type"]
+
+
+def test_metrics_event_includes_prompt_version(client):
+    use_wrapper(FakeStreamWrapper())
+    result = StreamResult()
+
+    list(EstimatorClient("", http_client=client).stream_estimation(VALID_REQUEST, result))
+
+    assert result.metrics["prompt_version"] == "v1"
+
+
+# --- POST /prompt/preview ----------------------------------------------------------
+
+
+def test_prompt_preview_returns_rendered_prompt_for_the_request(client):
+    preview = EstimatorClient("", http_client=client).preview_prompt(VALID_REQUEST)
+
+    assert preview["prompt_version"] == "v1"
+    assert "tabla por fases" in preview["system_prompt"]
+    assert VALID_REQUEST["description"] in preview["user_prompt"]
+    assert preview["examples"].startswith("<ejemplos>")
+    assert preview["examples"] in preview["system_prompt"]
+
+
+def test_prompt_preview_changes_with_the_form_options(client):
+    api = EstimatorClient("", http_client=client)
+
+    narrative = api.preview_prompt({**VALID_REQUEST, "output_format": "narrative"})
+
+    assert "tabla por fases" not in narrative["system_prompt"]
+
+
+def test_prompt_preview_is_hidden_in_production(client, monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+
+    response = client.post("/api/v1/prompt/preview", json=VALID_REQUEST)
+
+    assert response.status_code == 404

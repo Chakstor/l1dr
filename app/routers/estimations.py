@@ -16,12 +16,14 @@ from app.schemas.estimation import (
     FormOptions,
     OutputFormat,
     ProjectType,
+    PromptPreviewResponse,
 )
 from app.services.llm_service import (
     PROMPT_VERSION,
     LLMServiceError,
     StreamMetrics,
     generate_estimation,
+    preview_prompt,
     stream_estimation,
 )
 from app.services.llm_wrapper import LLMWrapper
@@ -62,7 +64,7 @@ async def create_estimation_stream(
 
     Eventos que envía, en este orden:
     - `token`   → {"text": "..."}  un trozo de la estimación (muchos)
-    - `metrics` → {...}            tokens, coste, caché, fallback, latencias (uno, al final)
+    - `metrics` → {...}            tokens, coste, caché, fallback, latencias y prompt_version (uno, al final)
     - `done`    → [DONE]           fin del stream
     Si el LLM falla, en lugar de `metrics` + `done` se envía:
     - `error`   → {"detail": "..."}
@@ -81,7 +83,7 @@ async def create_estimation_stream(
             yield {"event": "error", "data": json.dumps({"detail": str(exc)})}
             return
 
-        yield {"event": "metrics", "data": json.dumps(asdict(metrics))}
+        yield {"event": "metrics", "data": json.dumps({**asdict(metrics), "prompt_version": PROMPT_VERSION})}
         yield {"event": "done", "data": "[DONE]"}
 
     return EventSourceResponse(event_stream())
@@ -105,3 +107,17 @@ def get_context() -> ContextResponse:
             output_format=[option.value for option in OutputFormat],
         ),
     )
+
+
+@router.post("/prompt/preview", response_model=PromptPreviewResponse)
+def create_prompt_preview(request: EstimationRequest) -> PromptPreviewResponse:
+    """Devuelve el prompt exacto (system + user + ejemplos) que se enviaría al LLM
+    para esta petición, sin llamarlo. Útil para depurar y para mostrarlo en la interfaz.
+
+    No está disponible en producción: el prompt es parte del "know-how" del producto
+    y no debería exponerse a cualquier cliente.
+    """
+    if get_settings().APP_ENV == "production":
+        raise HTTPException(status_code=404, detail="Not Found")
+
+    return PromptPreviewResponse(**preview_prompt(request))

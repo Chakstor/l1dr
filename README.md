@@ -51,6 +51,7 @@ Todas las llamadas pasan por `app/services/llm_wrapper.py` (LiteLLM):
 | `POST /api/v1/estimate` | Estimación completa en una sola respuesta JSON |
 | `POST /api/v1/estimate/stream` | La misma estimación en streaming (Server-Sent Events) |
 | `GET /api/v1/context` | Modelos, versión del prompt y opciones válidas del formulario |
+| `POST /api/v1/prompt/preview` | El prompt exacto (system, user y ejemplos) que se enviaría al LLM para una petición, sin llamarlo. Desactivado con `APP_ENV=production` |
 | `GET /health` | Health check |
 
 El endpoint de streaming envía estos eventos SSE, en orden:
@@ -119,7 +120,8 @@ También puedes copiar el contenido del JSON en Swagger (`/docs`) → `POST /api
 Formulario para describir el proyecto y elegir tipo, nivel de detalle y formato;
 la estimación se muestra en streaming. Las opciones de los desplegables las da la API
 (`GET /api/v1/context`). El panel lateral muestra los modelos, la versión del prompt
-y las métricas de la última llamada (tokens, coste, caché, tiempo hasta el primer token y tiempo total).
+las métricas de la última llamada (tokens, coste, caché, tiempo hasta el primer token y tiempo total)
+y el prompt exacto que recibió el LLM (system prompt, mensaje de usuario y ejemplos CAG).
 
 Streamlit es un **cliente HTTP de la API** (`estimator_client.py`): necesita la API arrancada.
 

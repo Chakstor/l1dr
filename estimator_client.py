@@ -15,6 +15,7 @@ import httpx
 
 STREAM_PATH = "/api/v1/estimate/stream"
 CONTEXT_PATH = "/api/v1/context"
+PREVIEW_PATH = "/api/v1/prompt/preview"
 
 
 class EstimatorAPIError(Exception):
@@ -65,6 +66,16 @@ class EstimatorClient:
         """Modelos, versión del prompt y opciones válidas del formulario."""
         try:
             response = self.http.get(CONTEXT_PATH)
+        except httpx.HTTPError as exc:
+            raise EstimatorAPIError(f"No se pudo conectar con la API: {exc}") from exc
+        if response.status_code != 200:
+            raise EstimatorAPIError(_error_detail(response))
+        return response.json()
+
+    def preview_prompt(self, request: dict[str, Any]) -> dict[str, Any]:
+        """El prompt exacto que la API enviaría al LLM para este formulario (sin llamarlo)."""
+        try:
+            response = self.http.post(PREVIEW_PATH, json=request)
         except httpx.HTTPError as exc:
             raise EstimatorAPIError(f"No se pudo conectar con la API: {exc}") from exc
         if response.status_code != 200:

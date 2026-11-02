@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import structlog
 
 from app.dependencies import get_llm_wrapper
-from app.prompts.loader import render_estimation_prompt
+from app.prompts.loader import render_estimation_examples, render_estimation_prompt
 from app.schemas.estimation import EstimationRequest
 from app.services.llm_wrapper import LLMWrapper, StreamMetrics
 
@@ -77,3 +77,16 @@ def stream_estimation(
         )
     except Exception as exc:
         raise LLMServiceError(f"LLM stream failed: {exc}") from exc
+
+
+def preview_prompt(request: EstimationRequest, version: str = PROMPT_VERSION) -> dict:
+    """Renderiza el prompt de una petición sin llamar al LLM (coste cero)."""
+
+    system, user = render_estimation_prompt(request, version=version)
+
+    return {
+        "prompt_version": version,
+        "system_prompt": system,
+        "user_prompt": user,
+        "examples": render_estimation_examples(version),
+    }

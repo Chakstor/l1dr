@@ -84,3 +84,16 @@ class ContextResponse(BaseModel):
     fallback_model: str
     prompt_version: str
     options: FormOptions
+
+
+# ---------------------------------------------------------------------------
+# POST /prompt/preview
+# ---------------------------------------------------------------------------
+
+class PromptPreviewResponse(BaseModel):
+    """El prompt exacto que se enviaría al LLM para una petición, sin llamarlo."""
+
+    prompt_version: str
+    system_prompt: str
+    user_prompt: str
+    examples: str = Field(description="Bloque de ejemplos CAG (ya incluido dentro de system_prompt)")

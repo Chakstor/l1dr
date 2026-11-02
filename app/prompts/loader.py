@@ -38,3 +38,8 @@ def render_estimation_prompt(
     user = user_template.render(**context)
 
     return system, user
+
+
+def render_estimation_examples(version: str = "v1") -> str:
+    """Solo el bloque de ejemplos (contexto estático CAG) de una versión del prompt."""
+    return env.get_template(f"estimation/{version}/examples.j2").render()

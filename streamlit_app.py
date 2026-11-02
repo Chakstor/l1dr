@@ -71,7 +71,21 @@ def render_metrics(result: StreamResult) -> None:
         f"Modelo: `{metrics['model']}` · Fin: `{metrics['finish_reason']}`"
         + (" · ⚠️ respondió el fallback" if metrics["fallback_used"] else "")
     )
-    st.caption(f"Request ID: `{result.request_id}`")
+    st.caption(f"Prompt: `{metrics.get('prompt_version', '?')}` · Request ID: `{result.request_id}`")
+
+
+def render_prompt(prompt: dict | None) -> None:
+    """El prompt exacto que recibió el LLM en la última llamada (nivel 3 de la sesión 3)."""
+    if prompt is None:
+        st.caption("No se pudo obtener el prompt de esta llamada.")
+        return
+
+    with st.expander(f"System prompt ({prompt['prompt_version']})"):
+        st.code(prompt["system_prompt"], language="markdown")
+    with st.expander("Mensaje de usuario"):
+        st.code(prompt["user_prompt"], language="markdown")
+    with st.expander("Ejemplos inyectados (CAG)"):
+        st.code(prompt["examples"], language="markdown")
 
 
 def render_sidebar(context: dict | None) -> None:
@@ -94,6 +108,7 @@ def render_sidebar(context: dict | None) -> None:
                 f"{label(request['output_format'])}"
             )
             render_metrics(st.session_state.last["result"])
+            render_prompt(st.session_state.last["prompt"])
 
             if st.button("Limpiar"):
                 st.session_state.last = None
@@ -138,13 +153,21 @@ if submitted:
         "detail_level": detail_level,
         "output_format": output_format,
     }
+
+    # El prompt se pide aparte (no cuesta nada: no llama al LLM). Si falla, la
+    # estimación sigue adelante; solo nos quedamos sin verlo en el panel.
+    try:
+        prompt = get_client().preview_prompt(request)
+    except EstimatorAPIError:
+        prompt = None
+
     result = StreamResult()
     try:
         text = st.write_stream(get_client().stream_estimation(request, result))
     except EstimatorAPIError as exc:
         st.error(f"No se pudo generar la estimación: {exc}")
     else:
-        st.session_state.last = {"request": request, "text": text, "result": result}
+        st.session_state.last = {"request": request, "text": text, "result": result, "prompt": prompt}
 elif st.session_state.last is not None:
     st.markdown(st.session_state.last["text"])
 
