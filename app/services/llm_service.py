@@ -1,86 +1,77 @@
 from collections.abc import Iterator
 
-from app.context.examples import ESTIMATION_EXAMPLES
+import structlog
+
 from app.dependencies import get_llm_wrapper
+from app.prompts.loader import render_estimation_prompt
+from app.schemas.estimation import EstimationRequest
 from app.services.llm_wrapper import LLMWrapper, StreamMetrics
 
+log = structlog.get_logger()
+
 MAX_TOKENS = 4000
+PROMPT_VERSION = "v1"
 
 class LLMServiceError(Exception):
     """Se lanza cuando falla la llamada al proveedor LLM."""
 
 
 # ---------------------------------------------------------------------------
-# Construcción del prompt
+# Este módulo decide QUÉ se le pide al LLM (las plantillas de prompt).
+# CÓMO se llama al proveedor (fallback, caché, coste, logs) lo resuelve el wrapper.
 # ---------------------------------------------------------------------------
 
-def format_examples(examples: list[dict]) -> str:
-    """Convierte la lista de ejemplos en un bloque de texto para el system prompt."""
-    
-    parts = []
+def _render_prompt(request: EstimationRequest, version: str) -> tuple[str, str]:
+    """Renderiza las plantillas y registra qué se ha pedido (sin el texto, solo su tamaño)."""
 
-    for i, example in enumerate(examples, start=1):
-        parts.append(
-            f"--- EJEMPLO {i} ---\n"
-            f"Resumen de la reunión:\n{example['meeting_summary'].strip()}\n\n"
-            f"Estimación:\n{example['estimation'].strip()}\n"
-        )
+    system, user = render_estimation_prompt(request, version=version)
 
-    return "\n".join(parts)
+    log.info(
+        "estimation_request_received",
+        prompt_version=version,
+        project_type=request.project_type.value,
+        detail_level=request.detail_level.value,
+        output_format=request.output_format.value,
+        description_chars=len(request.description),
+    )
 
-
-def build_system_prompt() -> str:
-    """Construye el system prompt: rol + instrucciones + ejemplos (CAG)."""
-    
-    examples_text = format_examples(ESTIMATION_EXAMPLES)
-    
-    return (
-        "Eres un estimador de proyectos de software experto.\n\n"
-        "Tu tarea es analizar la transcripción de una reunión con un cliente "
-        "y generar una estimación tomando como referencia estimaciones previas.\n\n"
-        "Genera una estimación que incluya un desglose de tareas, horas estimadas, "
-        "total de horas, equipo recomendado y duración estimada.\n\n"
-        "Ejemplos de estimaciones previas:\n\n"
-        f"{examples_text}"
-    ) 
+    return system, user
 
 
-# ---------------------------------------------------------------------------
-# Punto de entrada
-#
-# Este módulo decide QUÉ se le pide al LLM (el prompt). CÓMO se llama al
-# proveedor (fallback, caché, coste, logs) lo resuelve el wrapper.
-# ---------------------------------------------------------------------------
-
-def generate_estimation(transcription: str, wrapper: LLMWrapper | None = None) -> dict:
-    """Genera una estimación completa. Devuelve el dict con tokens, latencia, coste y cache_hit."""
+def generate_estimation(
+    request: EstimationRequest,
+    wrapper: LLMWrapper | None = None,
+    version: str = PROMPT_VERSION,
+) -> dict:
+    """Genera una estimación completa. Devuelve el dict del wrapper + `prompt_version`."""
 
     wrapper = wrapper or get_llm_wrapper()
+    system, user = _render_prompt(request, version)
 
     try:
-        return wrapper.complete(
-            system_prompt=build_system_prompt(),
-            user_message=transcription,
-            max_tokens=MAX_TOKENS,
-        )
+        result = wrapper.complete(system_prompt=system, user_message=user, max_tokens=MAX_TOKENS)
     except Exception as exc:
         raise LLMServiceError(f"LLM call failed: {exc}") from exc
 
+    return {**result, "prompt_version": version}
+
 
 def stream_estimation(
-    transcription: str,
+    request: EstimationRequest,
     metrics: StreamMetrics,
     wrapper: LLMWrapper | None = None,
+    version: str = PROMPT_VERSION,
 ) -> Iterator[str]:
     """Genera la estimación en streaming. Va entregando el texto a trozos
     y rellena `metrics` (tokens, coste, TTFT, latencia) cuando termina."""
 
     wrapper = wrapper or get_llm_wrapper()
+    system, user = _render_prompt(request, version)
 
     try:
         yield from wrapper.complete_stream(
-            system_prompt=build_system_prompt(),
-            user_message=transcription,
+            system_prompt=system,
+            user_message=user,
             metrics=metrics,
             max_tokens=MAX_TOKENS,
         )

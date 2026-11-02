@@ -6,10 +6,15 @@ from estimator_client import EstimatorAPIError, EstimatorClient, StreamResult, p
 
 ENDPOINT = "/api/v1/estimate/stream"
 
-VALID_TRANSCRIPTION = (
-    "El cliente necesita una web corporativa con blog, formulario de contacto "
-    "e integración con HubSpot. El diseño ya existe en Figma."
-)
+VALID_REQUEST = {
+    "description": (
+        "El cliente necesita una web corporativa con blog, formulario de contacto "
+        "e integración con HubSpot. El diseño ya existe en Figma."
+    ),
+    "project_type": "web_saas",
+    "detail_level": "medium",
+    "output_format": "phases_table",
+}
 
 
 class FakeStreamWrapper:
@@ -39,7 +44,7 @@ def use_wrapper(wrapper):
 
 def raw_events(client, **kwargs):
     """Llama al endpoint y devuelve la lista de (evento, datos) tal como llegan."""
-    with client.stream("POST", ENDPOINT, json={"transcription": VALID_TRANSCRIPTION}, **kwargs) as response:
+    with client.stream("POST", ENDPOINT, json=VALID_REQUEST, **kwargs) as response:
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("text/event-stream")
         return list(parse_sse(response.iter_lines()))
@@ -65,8 +70,8 @@ def test_stream_sends_error_event_when_llm_fails(client):
     assert "provider down" in events[-1][1]
 
 
-def test_stream_rejects_short_transcription(client):
-    response = client.post(ENDPOINT, json={"transcription": "muy corta"})
+def test_stream_rejects_short_description(client):
+    response = client.post(ENDPOINT, json={**VALID_REQUEST, "description": "muy corta"})
 
     assert response.status_code == 422
 
@@ -75,7 +80,7 @@ def test_stream_returns_request_id_header(client):
     use_wrapper(FakeStreamWrapper())
 
     with client.stream(
-        "POST", ENDPOINT, json={"transcription": VALID_TRANSCRIPTION}, headers={"X-Request-ID": "stream-1"}
+        "POST", ENDPOINT, json=VALID_REQUEST, headers={"X-Request-ID": "stream-1"}
     ) as response:
         response.read()
 
@@ -89,7 +94,7 @@ def test_client_rebuilds_text_and_gets_metrics(client):
     use_wrapper(FakeStreamWrapper())
     result = StreamResult()
 
-    text = "".join(EstimatorClient("", http_client=client).stream_estimation(VALID_TRANSCRIPTION, result))
+    text = "".join(EstimatorClient("", http_client=client).stream_estimation(VALID_REQUEST, result))
 
     # El salto de línea dentro de un trozo llega intacto
     assert text == "## Estimación\nTotal: 80 horas"
@@ -102,21 +107,22 @@ def test_client_raises_on_llm_error(client):
     use_wrapper(FakeStreamWrapper(error=RuntimeError("provider down")))
 
     with pytest.raises(EstimatorAPIError, match="provider down"):
-        list(EstimatorClient("", http_client=client).stream_estimation(VALID_TRANSCRIPTION, StreamResult()))
+        list(EstimatorClient("", http_client=client).stream_estimation(VALID_REQUEST, StreamResult()))
 
 
 def test_client_raises_readable_error_on_validation_error(client):
     with pytest.raises(EstimatorAPIError, match="422"):
-        list(EstimatorClient("", http_client=client).stream_estimation("muy corta", StreamResult()))
+        list(EstimatorClient("", http_client=client).stream_estimation({**VALID_REQUEST, "description": "muy corta"}, StreamResult()))
 
 
 # --- GET /context ----------------------------------------------------------------
 
 
-def test_context_returns_prompt_examples_and_models(client):
+def test_context_returns_models_prompt_version_and_form_options(client):
     context = EstimatorClient("", http_client=client).get_context()
 
-    assert "EJEMPLO 1" in context["system_prompt"]
-    assert len(context["examples"]) >= 2
     assert context["primary_model"] == "gpt-4o-mini"
     assert context["fallback_model"] == "claude-haiku-4-5-20251001"
+    assert context["prompt_version"] == "v1"
+    assert context["options"]["output_format"] == ["phases_table", "line_items", "narrative"]
+    assert "web_saas" in context["options"]["project_type"]

@@ -35,7 +35,7 @@ def test_client_wraps_connection_errors():
     client = EstimatorClient("http://api", http_client=http)
 
     with pytest.raises(EstimatorAPIError, match="No se pudo conectar"):
-        list(client.stream_estimation("x" * 60, StreamResult()))
+        list(client.stream_estimation({"description": "x" * 60}, StreamResult()))
 
     with pytest.raises(EstimatorAPIError, match="No se pudo conectar"):
         client.get_context()

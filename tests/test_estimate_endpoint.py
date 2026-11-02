@@ -5,10 +5,15 @@ from app.main import app
 
 ENDPOINT = "/api/v1/estimate"
 
-VALID_TRANSCRIPTION = (
-    "El cliente necesita una web corporativa con blog, formulario de contacto "
-    "e integración con HubSpot. El diseño ya existe en Figma."
-)
+VALID_REQUEST = {
+    "description": (
+        "El cliente necesita una web corporativa con blog, formulario de contacto "
+        "e integración con HubSpot. El diseño ya existe en Figma."
+    ),
+    "project_type": "web_saas",
+    "detail_level": "medium",
+    "output_format": "phases_table",
+}
 
 FAKE_RESULT = {
     "estimation": "## Estimación: Web corporativa\n\nTotal: 80 horas",
@@ -46,11 +51,12 @@ def use_wrapper(wrapper):
 def test_estimate_returns_estimation(client):
     use_wrapper(FakeWrapper())
 
-    response = client.post(ENDPOINT, json={"transcription": VALID_TRANSCRIPTION})
+    response = client.post(ENDPOINT, json=VALID_REQUEST)
 
     assert response.status_code == 200
     body = response.json()
-    assert body["estimation"] == FAKE_RESULT["estimation"]
+    assert body["text"] == FAKE_RESULT["estimation"]
+    assert body["prompt_version"] == "v1"
     assert body["provider"] == "openai"
     assert body["usage"]["total_tokens"] == 150
     assert body["latency_ms"] == 1234
@@ -58,8 +64,14 @@ def test_estimate_returns_estimation(client):
     assert body["cache_hit"] is False
 
 
-def test_estimate_rejects_short_transcription(client):
-    response = client.post(ENDPOINT, json={"transcription": "muy corta"})
+def test_estimate_rejects_short_description(client):
+    response = client.post(ENDPOINT, json={**VALID_REQUEST, "description": "muy corta"})
+
+    assert response.status_code == 422
+
+
+def test_estimate_rejects_unknown_option(client):
+    response = client.post(ENDPOINT, json={**VALID_REQUEST, "output_format": "pdf"})
 
     assert response.status_code == 422
 
@@ -67,7 +79,7 @@ def test_estimate_rejects_short_transcription(client):
 def test_estimate_returns_502_when_llm_fails(client):
     use_wrapper(FakeWrapper(error=RuntimeError("provider down")))
 
-    response = client.post(ENDPOINT, json={"transcription": VALID_TRANSCRIPTION})
+    response = client.post(ENDPOINT, json=VALID_REQUEST)
 
     assert response.status_code == 502
     assert "provider down" in response.json()["detail"]
@@ -98,7 +110,7 @@ def test_request_id_reaches_code_inside_the_endpoint(client):
 
     response = client.post(
         ENDPOINT,
-        json={"transcription": VALID_TRANSCRIPTION},
+        json=VALID_REQUEST,
         headers={"X-Request-ID": "trazame-esta"},
     )
 

@@ -62,7 +62,7 @@ class EstimatorClient:
         )
 
     def get_context(self) -> dict[str, Any]:
-        """System prompt, ejemplos y modelos configurados en la API."""
+        """Modelos, versión del prompt y opciones válidas del formulario."""
         try:
             response = self.http.get(CONTEXT_PATH)
         except httpx.HTTPError as exc:
@@ -71,13 +71,16 @@ class EstimatorClient:
             raise EstimatorAPIError(_error_detail(response))
         return response.json()
 
-    def stream_estimation(self, transcription: str, result: StreamResult) -> Iterator[str]:
-        """Entrega la estimación a trozos. Al terminar, deja las métricas en `result.metrics`."""
+    def stream_estimation(self, request: dict[str, Any], result: StreamResult) -> Iterator[str]:
+        """Entrega la estimación a trozos. Al terminar, deja las métricas en `result.metrics`.
+
+        `request` es el JSON del formulario: description, project_type, detail_level, output_format.
+        """
         headers = {"Accept": "text/event-stream", "X-Request-ID": result.request_id}
 
         try:
             with self.http.stream(
-                "POST", STREAM_PATH, json={"transcription": transcription}, headers=headers
+                "POST", STREAM_PATH, json=request, headers=headers
             ) as response:
                 if response.status_code != 200:
                     response.read()

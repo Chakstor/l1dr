@@ -1,9 +1,8 @@
-"""Interfaz de chat del estimador.
+"""Formulario del estimador (sesión 4).
 
-Streamlit es solo un CLIENTE de la API: le envía la transcripción por HTTP
-(POST /api/v1/estimate/stream) y pinta la respuesta según llega por SSE.
-No importa nada de `app/`, así que se podría cambiar por React, Angular...
-sin tocar el backend.
+Streamlit es solo un CLIENTE de la API: le envía los parámetros del formulario
+por HTTP (POST /api/v1/estimate/stream) y pinta la respuesta según llega por SSE.
+No importa nada de `app/`: hasta las opciones de los desplegables las pide a la API.
 """
 
 import os
@@ -16,9 +15,23 @@ from estimator_client import EstimatorAPIError, EstimatorClient, StreamResult
 load_dotenv()
 API_BASE_URL = os.getenv("ESTIMATOR_API_BASE_URL", "http://localhost:8000")
 
+# Textos que ve el usuario para cada valor que acepta la API
+LABELS = {
+    "mobile_app": "App móvil",
+    "web_saas": "Web / SaaS",
+    "internal_tool": "Herramienta interna",
+    "data_pipeline": "Pipeline de datos",
+    "summary": "Resumen",
+    "medium": "Medio",
+    "detailed": "Detallado",
+    "phases_table": "Tabla por fases",
+    "line_items": "Lista de tareas",
+    "narrative": "Narrativo",
+}
+
 st.set_page_config(page_title="Estimador de Proyectos", page_icon="📊")
 st.title("Estimador de Proyectos de Software")
-st.caption("Pega la transcripción de una reunión y recibe la estimación en streaming.")
+st.caption("Describe el proyecto, elige cómo quieres la estimación y recíbela en streaming.")
 
 
 @st.cache_resource
@@ -29,15 +42,16 @@ def get_client() -> EstimatorClient:
 
 @st.cache_data(ttl=60, show_spinner=False)
 def get_context() -> dict:
-    """Prompt, ejemplos y modelos de la API. Se guarda 60 s para no pedirlo en cada rerun."""
+    """Modelos, versión del prompt y opciones del formulario. Se guarda 60 s."""
     return get_client().get_context()
 
 
-if "messages" not in st.session_state:
-    st.session_state.messages = []
+def label(value: str) -> str:
+    return LABELS.get(value, value)
 
-if "last_result" not in st.session_state:
-    st.session_state.last_result = None
+
+if "last" not in st.session_state:
+    st.session_state.last = None
 
 
 def render_metrics(result: StreamResult) -> None:
@@ -60,67 +74,78 @@ def render_metrics(result: StreamResult) -> None:
     st.caption(f"Request ID: `{result.request_id}`")
 
 
-def render_sidebar() -> None:
-    """Panel lateral: métricas de la última llamada, system prompt y ejemplos CAG."""
-
+def render_sidebar(context: dict | None) -> None:
     with st.sidebar:
-        st.header("Contexto CAG")
-
-        try:
-            context = get_context()
-        except EstimatorAPIError as exc:
-            st.error(f"No se pudo cargar el contexto desde `{API_BASE_URL}`: {exc}")
-            context = None
-
+        st.header("Configuración")
         if context:
             st.markdown(
                 f"**Primario:** `{context['primary_model']}`  \n"
-                f"**Fallback:** `{context['fallback_model']}`"
+                f"**Fallback:** `{context['fallback_model']}`  \n"
+                f"**Prompt:** `{context['prompt_version']}`"
             )
 
         st.subheader("Última llamada")
-        if st.session_state.last_result is None:
-            st.info("Aún no hay llamadas. Envía una transcripción para ver las métricas.")
+        if st.session_state.last is None:
+            st.info("Aún no hay llamadas. Rellena el formulario para ver las métricas.")
         else:
-            render_metrics(st.session_state.last_result)
+            request = st.session_state.last["request"]
+            st.caption(
+                f"{label(request['project_type'])} · {label(request['detail_level'])} · "
+                f"{label(request['output_format'])}"
+            )
+            render_metrics(st.session_state.last["result"])
 
-        if context:
-            with st.expander("System prompt activo"):
-                st.code(context["system_prompt"], language="markdown")
-
-            with st.expander(f"Ejemplos inyectados ({len(context['examples'])})"):
-                for i, example in enumerate(context["examples"], start=1):
-                    st.markdown(f"**Ejemplo {i}: resumen de la reunión**")
-                    st.text(example["meeting_summary"].strip())
-                    st.markdown(f"**Ejemplo {i}: estimación**")
-                    st.markdown(example["estimation"].strip())
-                    st.divider()
-
-        if st.button("Limpiar conversación"):
-            st.session_state.messages = []
-            st.session_state.last_result = None
-            st.rerun()
+            if st.button("Limpiar"):
+                st.session_state.last = None
+                st.rerun()
 
         st.caption(f"API: `{API_BASE_URL}`")
 
 
-for message in st.session_state.messages:
-    with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+# --- Contexto de la API (sin él no se puede construir el formulario) ---------
 
-if transcription := st.chat_input("Pega aquí la transcripción de la reunión..."):
-    st.session_state.messages.append({"role": "user", "content": transcription})
-    with st.chat_message("user"):
-        st.markdown(transcription)
+try:
+    context = get_context()
+except EstimatorAPIError as exc:
+    st.error(f"No se pudo conectar con la API en `{API_BASE_URL}`: {exc}")
+    render_sidebar(None)
+    st.stop()
 
-    with st.chat_message("assistant"):
-        result = StreamResult()
-        try:
-            estimation = st.write_stream(get_client().stream_estimation(transcription, result))
-        except EstimatorAPIError as exc:
-            st.error(f"No se pudo generar la estimación: {exc}")
-        else:
-            st.session_state.messages.append({"role": "assistant", "content": estimation})
-            st.session_state.last_result = result
+options = context["options"]
 
-render_sidebar()
+# --- Formulario --------------------------------------------------------------
+
+with st.form("estimation_form"):
+    description = st.text_area(
+        "Descripción del proyecto",
+        height=200,
+        placeholder="Describe el proyecto o pega la transcripción de la reunión...",
+    )
+
+    col1, col2, col3 = st.columns(3)
+    project_type = col1.selectbox("Tipo de proyecto", options["project_type"], format_func=label)
+    detail_level = col2.selectbox("Nivel de detalle", options["detail_level"], index=1, format_func=label)
+    output_format = col3.selectbox("Formato de salida", options["output_format"], format_func=label)
+
+    submitted = st.form_submit_button("Generar estimación", type="primary")
+
+# --- Resultado ---------------------------------------------------------------
+
+if submitted:
+    request = {
+        "description": description,
+        "project_type": project_type,
+        "detail_level": detail_level,
+        "output_format": output_format,
+    }
+    result = StreamResult()
+    try:
+        text = st.write_stream(get_client().stream_estimation(request, result))
+    except EstimatorAPIError as exc:
+        st.error(f"No se pudo generar la estimación: {exc}")
+    else:
+        st.session_state.last = {"request": request, "text": text, "result": result}
+elif st.session_state.last is not None:
+    st.markdown(st.session_state.last["text"])
+
+render_sidebar(context)

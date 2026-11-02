@@ -1,7 +1,16 @@
 import pytest
 
+from app.prompts.loader import render_estimation_prompt
+from app.schemas.estimation import EstimationRequest
 from app.services import llm_service
 from app.services.llm_service import LLMServiceError, StreamMetrics
+
+REQUEST = EstimationRequest(
+    description="Aplicación web para gestionar reservas de salas de reuniones.",
+    project_type="web_saas",
+    detail_level="detailed",
+    output_format="phases_table",
+)
 
 FAKE_RESULT = {
     "estimation": "## Estimación de prueba",
@@ -38,28 +47,27 @@ class FakeWrapper:
         yield "mundo"
 
 
-def test_system_prompt_includes_examples():
-    prompt = llm_service.build_system_prompt()
-
-    assert "EJEMPLO 1" in prompt
-    assert "EJEMPLO 2" in prompt
-
-
-def test_generate_estimation_sends_cag_prompt_and_transcription():
+def test_generate_estimation_sends_rendered_templates_as_separate_messages():
     wrapper = FakeWrapper()
 
-    result = llm_service.generate_estimation("transcripción de prueba", wrapper)
+    llm_service.generate_estimation(REQUEST, wrapper)
 
-    assert result == FAKE_RESULT
-    assert wrapper.calls[0]["user_message"] == "transcripción de prueba"
-    assert wrapper.calls[0]["system_prompt"] == llm_service.build_system_prompt()
+    system, user = render_estimation_prompt(REQUEST, version="v1")
+    assert wrapper.calls[0] == {"system_prompt": system, "user_message": user}
+
+
+def test_generate_estimation_adds_prompt_version():
+    result = llm_service.generate_estimation(REQUEST, FakeWrapper())
+
+    assert result["prompt_version"] == "v1"
+    assert result["estimation"] == FAKE_RESULT["estimation"]
 
 
 def test_generate_estimation_wraps_errors():
     wrapper = FakeWrapper(error=RuntimeError("api down"))
 
     with pytest.raises(LLMServiceError) as exc_info:
-        llm_service.generate_estimation("transcripción de prueba", wrapper)
+        llm_service.generate_estimation(REQUEST, wrapper)
 
     assert "api down" in str(exc_info.value)
 
@@ -67,7 +75,7 @@ def test_generate_estimation_wraps_errors():
 def test_stream_estimation_yields_chunks_and_passes_metrics():
     metrics = StreamMetrics()
 
-    text = "".join(llm_service.stream_estimation("transcripción de prueba", metrics, FakeWrapper()))
+    text = "".join(llm_service.stream_estimation(REQUEST, metrics, FakeWrapper()))
 
     assert text == "Hola mundo"
     assert metrics.input_tokens == 10
@@ -77,4 +85,4 @@ def test_stream_estimation_wraps_errors():
     wrapper = FakeWrapper(error=RuntimeError("api down"))
 
     with pytest.raises(LLMServiceError):
-        list(llm_service.stream_estimation("transcripción de prueba", StreamMetrics(), wrapper))
+        list(llm_service.stream_estimation(REQUEST, StreamMetrics(), wrapper))

@@ -7,13 +7,20 @@ from sse_starlette import EventSourceResponse
 from starlette.concurrency import iterate_in_threadpool
 
 from app.config import get_settings
-from app.context.examples import ESTIMATION_EXAMPLES
 from app.dependencies import get_llm_wrapper
-from app.schemas.estimation import ContextResponse, EstimationRequest, EstimationResponse
+from app.schemas.estimation import (
+    ContextResponse,
+    DetailLevel,
+    EstimationRequest,
+    EstimationResponse,
+    FormOptions,
+    OutputFormat,
+    ProjectType,
+)
 from app.services.llm_service import (
+    PROMPT_VERSION,
     LLMServiceError,
     StreamMetrics,
-    build_system_prompt,
     generate_estimation,
     stream_estimation,
 )
@@ -26,15 +33,24 @@ def create_estimation(
     request: EstimationRequest,
     wrapper: LLMWrapper = Depends(get_llm_wrapper),
 ) -> EstimationResponse:
-    """Recibe la transcripción de una reunión y devuelve una estimación."""
+    """Recibe los parámetros del formulario y devuelve una estimación."""
 
     try:
-        result = generate_estimation(request.transcription, wrapper)
+        result = generate_estimation(request, wrapper)
     except LLMServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
-    # **results same as ...result in JS
-    return EstimationResponse(**result)
+    return EstimationResponse(
+        text=result["estimation"],
+        prompt_version=result["prompt_version"],
+        model=result["model"],
+        provider=result["provider"],
+        usage=result["usage"],
+        finish_reason=result["finish_reason"],
+        latency_ms=result["latency_ms"],
+        cost_usd=result["cost_usd"],
+        cache_hit=result["cache_hit"],
+    )
 
 
 @router.post("/estimate/stream")
@@ -54,7 +70,7 @@ async def create_estimation_stream(
 
     async def event_stream() -> AsyncIterator[dict]:
         metrics = StreamMetrics()
-        chunks = stream_estimation(request.transcription, metrics, wrapper)
+        chunks = stream_estimation(request, metrics, wrapper)
 
         try:
             # El wrapper es síncrono: cada trozo se pide en un hilo aparte
@@ -73,14 +89,19 @@ async def create_estimation_stream(
 
 @router.get("/context", response_model=ContextResponse)
 def get_context() -> ContextResponse:
-    """Contexto CAG activo: system prompt, ejemplos inyectados y modelos configurados.
+    """Configuración para los clientes: modelos, versión del prompt y opciones del formulario.
 
-    Permite a cualquier cliente (p. ej. Streamlit) mostrarlo sin importar código del backend.
+    Así el formulario de Streamlit (o de cualquier frontend) se construye con los
+    valores que acepta la API, sin copiarlos ni importar código del backend.
     """
     settings = get_settings()
     return ContextResponse(
-        system_prompt=build_system_prompt(),
-        examples=ESTIMATION_EXAMPLES,
         primary_model=settings.PRIMARY_MODEL,
         fallback_model=settings.FALLBACK_MODEL,
+        prompt_version=PROMPT_VERSION,
+        options=FormOptions(
+            project_type=[option.value for option in ProjectType],
+            detail_level=[option.value for option in DetailLevel],
+            output_format=[option.value for option in OutputFormat],
+        ),
     )
