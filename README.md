@@ -3,6 +3,9 @@
 API desarrollada con FastAPI que genera estimaciones de proyectos
 de software utilizando un LLM y contexto estático (CAG).
 
+La entrada es un formulario tipado (descripción + tipo de proyecto, nivel de detalle
+y formato de salida) y los prompts viven en plantillas Jinja2 versionadas.
+
 ## Setup
 
 Instalar dependencias:
@@ -47,7 +50,7 @@ Todas las llamadas pasan por `app/services/llm_wrapper.py` (LiteLLM):
 |---|---|
 | `POST /api/v1/estimate` | Estimación completa en una sola respuesta JSON |
 | `POST /api/v1/estimate/stream` | La misma estimación en streaming (Server-Sent Events) |
-| `GET /api/v1/context` | System prompt, ejemplos CAG y modelos configurados |
+| `GET /api/v1/context` | Modelos, versión del prompt y opciones válidas del formulario |
 | `GET /health` | Health check |
 
 El endpoint de streaming envía estos eventos SSE, en orden:
@@ -66,10 +69,40 @@ Swagger:
 
 http://localhost:8000/docs
 
+Cuerpo de la petición (los dos endpoints de estimación):
+
+```json
+{
+  "description": "Descripción o transcripción del proyecto (20–80 000 caracteres)",
+  "project_type": "mobile_app | web_saas | internal_tool | data_pipeline",
+  "detail_level": "summary | medium | detailed",
+  "output_format": "phases_table | line_items | narrative"
+}
+```
+
+La respuesta de `POST /api/v1/estimate` incluye `text` (la estimación), `prompt_version`
+y los metadatos de la llamada: `model`, `provider`, `usage`, `finish_reason`,
+`latency_ms`, `cost_usd` y `cache_hit`.
+
+## Prompts versionados
+
+```
+app/prompts/
+├── loader.py              # render_estimation_prompt(request, version="v1") -> (system, user)
+└── estimation/
+    └── v1/
+        ├── system.j2      # rol, alcance, formato de salida y nivel de detalle (condicionales)
+        ├── user.j2        # la descripción del proyecto en <project_description>
+        └── examples.j2    # ejemplos few-shot (CAG), incluidos en system.j2
+```
+
+Para crear una versión nueva se copia `v1/` a `v2/`, se modifica y se cambia
+`PROMPT_VERSION` en `app/services/llm_service.py`. Cada respuesta indica qué versión la generó.
+
 ## Probar con la transcripción de ejemplo
 
-En `samples/estimate_request.json` hay una transcripción de reunión de ejemplo
-(clínica dental con 3 sedes que quiere reservas online).
+En `samples/estimate_request.json` hay una petición de ejemplo con la transcripción
+de una reunión (clínica dental con 3 sedes que quiere reservas online).
 
 Con el servidor arrancado:
 
@@ -81,10 +114,11 @@ curl -X POST http://localhost:8000/api/v1/estimate \
 
 También puedes copiar el contenido del JSON en Swagger (`/docs`) → `POST /api/v1/estimate` → _Try it out_.
 
-## Interfaz conversacional (Streamlit)
+## Formulario (Streamlit)
 
-Interfaz de chat para pegar una transcripción y ver la estimación en streaming.
-El panel lateral muestra el system prompt activo, los ejemplos CAG inyectados
+Formulario para describir el proyecto y elegir tipo, nivel de detalle y formato;
+la estimación se muestra en streaming. Las opciones de los desplegables las da la API
+(`GET /api/v1/context`). El panel lateral muestra los modelos, la versión del prompt
 y las métricas de la última llamada (tokens, coste, caché, tiempo hasta el primer token y tiempo total).
 
 Streamlit es un **cliente HTTP de la API** (`estimator_client.py`): necesita la API arrancada.
@@ -98,3 +132,13 @@ Disponible en `http://localhost:8501`. La URL de la API se configura con
 `ESTIMATOR_API_BASE_URL` en el `.env` (por defecto `http://localhost:8000`).
 Cada mensaje envía su propio `X-Request-ID`, que se muestra en el panel lateral
 y aparece en los logs de la API.
+
+## Tests
+
+```bash
+uv run pytest -v
+```
+
+No llaman a ningún LLM ni necesitan Redis: los proveedores se simulan con `mock_response`
+de LiteLLM y Redis con `fakeredis`. Incluyen tests de las plantillas
+(`tests/prompts/`), que comprueban qué instrucciones aparecen según cada opción del formulario.
